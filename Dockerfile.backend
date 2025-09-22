@@ -6,7 +6,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y git
 
 # Clone your backend repo
-RUN git clone git@github.com:Akhilbalusani1/sdp-backend.git .
+RUN git clone https://github.com/Akhilbalusani1/sdp-backend.git .
 
 # Build the Spring Boot JAR
 RUN --mount=type=cache,target=/root/.m2 mvn clean install package -DskipTests
