@@ -1,73 +1,79 @@
 version: '3.8'
 
 services:
-db:
-image: mysql:8.0
-container_name: fms-db
-restart: always
-env_file: .env
-environment:
-MYSQL_DATABASE: ${MYSQL_DATABASE}
-MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-MYSQL_USER: ${MYSQL_USER}
-MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-ports:
-- "3307:3306"
+  db:
+    image: mysql:8.0
+    container_name: fms-db
+    restart: always
+    env_file: .env
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - fms-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.backend
+    container_name: fms-backend
+    restart: always
+    env_file: .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SERVER_PORT: 8080
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    networks:
+      - fms-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    container_name: fms-frontend
+    restart: always
+    environment:
+      VITE_API_BASE_URL: http://localhost:80/api
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    networks:
+      - fms-net
+
+  nginx:
+    image: nginx:stable
+    container_name: fms-nginx
+    restart: always
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+    networks:
+      - fms-net
+
 volumes:
-- db_data:/var/lib/mysql
+  db_data:
+
 networks:
-- fms-net
-healthcheck:
-test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-interval: 10s
-retries: 10
-
-
-backend:
-build:
-context: ./backend
-dockerfile: Dockerfile.backend
-container_name: fms-backend
-restart: always
-env_file: .env
-environment:
-SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE}
-SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
-SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
-SPRING_JPA_HIBERNATE_DDL_AUTO: update
-SERVER_PORT: 8080
-depends_on:
-db:
-condition: service_healthy
-ports:
-- "8081:8080"
-networks:
-- fms-net
-
-
-frontend:
-build:
-context: ./frontend
-dockerfile: Dockerfile.frontend
-container_name: fms-frontend
-restart: always
-environment:
-VITE_API_BASE_URL: http://localhost:80/api
-depends_on:
-- backend
-ports:
-- "5173:80"
-networks:
-- fms-net
-
-
-nginx:
-image: nginx:stable
-container_name: fms-nginx
-restart: always
-volumes:
-- ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-ports:
-- "80:80"
-depends_on:
-driver: bridge
+  fms-net:
+    driver: bridge
